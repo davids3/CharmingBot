@@ -33,6 +33,7 @@ PLAY_UTF = "\u25B6 "
 REPEAT_LIST_UTF = "\U0001F501"
 REPEAT_SONG_UTF = "\U0001F502"
 DC_TIMEOUT = 60
+PAGE_LIMIT = 10
 
 bind_channel = None
 paused = False
@@ -91,7 +92,7 @@ class Play(M):
             try:
                 if url.startswith(PLIST_PREFIX):
                     # Pure playlist
-                    songs = playlist_info(url, self.message.author)
+                    songs = await playlist_info(url, self.message.author)
                     playlist.extend(songs)
 
                     # Construct add message
@@ -110,7 +111,7 @@ class Play(M):
 
                 elif url.startswith(VID_PREFIX):
                     # Video, could have playlist, add anyway
-                    song = video_info(url, self.message.author)
+                    song = await video_info(url, self.message.author)
                     playlist.append(song)
 
                     await self.client.send_message(bind_channel, out)
@@ -474,9 +475,9 @@ class ListLimit(M):
         try: limit = int(limit)
         except ValueError: raise CommandFailure("Please enter a valid integer")
 
-        # API limit is 50 videos
-        if 0 < limit <= 50: list_limit = limit
-        else: raise CommandFailure("Please enter an integer in [0-50]")
+        # Pagination baby!
+        if 0 < limit <= 200: list_limit = limit
+        else: raise CommandFailure("Please enter an integer in [0-200]")
 
         return "Playlist fetch limit set to: %d" % limit
 
@@ -669,7 +670,7 @@ async def music(voice, client, channel):
         await asyncio.sleep(SLEEP_INTERVAL)
 
 
-def video_info(url, author):
+async def video_info(url, author):
     # This is the only function that gets the video info
     youtube = build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION, 
           developerKey=DEVELOPER_KEY)
@@ -688,7 +689,8 @@ def video_info(url, author):
             ).execute()
 
     # Using vid id, will always return one item
-    vid = videos['items'][0]
+    try: vid = videos['items'][0]
+    except IndexError: raise CommandFailure("Can't find vid id %s" % url)
 
     # Construct info dict and return it
     info = {}
@@ -700,7 +702,7 @@ def video_info(url, author):
     return info
 
 
-def playlist_info(url, author):
+async def playlist_info(url, author):
     youtube = build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION, 
           developerKey=DEVELOPER_KEY)
 
@@ -711,23 +713,36 @@ def playlist_info(url, author):
     else:
         vid = url
 
+    limit = list_limit
+
     # API call
     videos = youtube.playlistItems().list(
             part='snippet, contentDetails',
             playlistId=vid,
-            maxResults=list_limit
+            maxResults=PAGE_LIMIT
             ).execute()
+    results = []
+    results.extend(videos['items'])
+    nextPage = videos['nextPageToken']
+    limit -= PAGE_LIMIT
 
-    # Get video metadata
-    info_list = []
-    info = dict()
-    for video in videos['items']:
-        # Create a new dict each iteration and append to list
-        copy = info.copy()
-        copy = video_info(video['contentDetails']['videoId'], author)
-        info_list.append(copy)
+    # Pagination loop
+    while limit > 0:
+        videos = youtube.playlistItems().list(
+                part='snippet, contentDetails',
+                playlistId=vid,
+                maxResults=min(PAGE_LIMIT, limit),
+                pageToken=nextPage
+                ).execute()
+        results.extend(videos['items'])
+        try: nextPage = videos['nextPageToken']
+        except KeyError: break
+        limit -= PAGE_LIMIT
 
-    return info_list
+    # Get video metadata asyncronously
+    coroutines = [ video_info(video['contentDetails']['videoId'], author) \
+                   for video in results ]
+    return await asyncio.gather(*coroutines)
 
 
 def youtube_search(query, author):
