@@ -52,9 +52,8 @@ class M(Command):
 
 class Play(M):
     desc = "Plays music. Binds commands to the channel invoked.\n"
-    desc += "Accepts youtube links, playlists (first %d entries), and more!\n"
-    desc += noembed(YDL_SITES) + "\n"
-    desc += "Note: Playlists fetching through the YT API is limited to 50 vids"
+    desc += "Accepts youtube links, playlists (first %d entries)" % PAGE_LIMIT
+    desc += ", and more!\n" + noembed(YDL_SITES) + "\n"
 
     async def eval(self, *args):
         global bind_channel
@@ -92,7 +91,7 @@ class Play(M):
             try:
                 if url.startswith(PLIST_PREFIX):
                     # Pure playlist
-                    songs = await playlist_info(url, self.message.author)
+                    songs = await playlist_info(url, self.message.author, 10)
                     playlist.extend(songs)
 
                     # Construct add message
@@ -185,6 +184,38 @@ class Play(M):
             await music(voice, self.client, self.message.channel)
 
 
+class Playlist(M):
+    desc = "Adds %d entrie(s) from a youtube playlist\n" % list_limit
+    desc += "See `!m` `listlimit` to change the fetch limit"
+
+    async def eval(self, url):
+        global bind_channel
+        global list_limit
+        global player
+        global playlist
+
+        check_bot_join(self.client, self.message)
+
+        if not player: raise CommandFailure("Not playing anything!")
+        if player.is_done(): raise CommandFailure("Not playing anything!")
+
+        if url.startswith(PLIST_PREFIX):
+
+            songs = await playlist_info(url, self.message.author, list_limit)
+            playlist.extend(songs)
+
+            # Construct add message
+            out = bold("Added Songs:") + "\n"
+            for song in songs:
+                d = datetime.timedelta(seconds=int(song['duration']))
+                out += bold("[%s] %s" % (str(d), song['title']))
+                out += "\n"
+
+        else: out = "Invalid playlist URL; must be in form %s" % PLIST_PREFIX
+
+        return out
+
+
 class Pause(M):
     desc = "Pauses music"
 
@@ -247,7 +278,7 @@ class Skip(M):
     desc = "Skips the current song. Does not skip if repeat is `song`"
 
     def eval(self):
-        # Check if connected to a voice channel
+
         check_bot_join(self.client, self.message)
 
         if not player: raise CommandFailure("Not playing anything!")
@@ -702,7 +733,7 @@ async def video_info(url, author):
     return info
 
 
-async def playlist_info(url, author):
+async def playlist_info(url, author, limit):
     youtube = build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION, 
           developerKey=DEVELOPER_KEY)
 
@@ -712,8 +743,6 @@ async def playlist_info(url, author):
         vid = vid.split("&")[0]
     else:
         vid = url
-
-    limit = list_limit
 
     # API call
     videos = youtube.playlistItems().list(
