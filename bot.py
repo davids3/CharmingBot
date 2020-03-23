@@ -5,9 +5,10 @@ import commands
 #from commands.leaderboard import leaderboard, LEADERBOARD_CHANNEL
 from commands.twitch import twitch, TWITCH_CHANNEL
 from configstartup import config
-from commands.report import report, REPORT_CHANNEL
+# from commands.report import report, REPORT_CHANNEL
+# from commands.whitelist import check_whitelist, WHITELIST_CHANNEL
 from commands.emoji import emojistats
-from commands.birthday import update_birthday
+# from commands.birthday import update_birthday
 
 import asyncio
 import json
@@ -49,7 +50,7 @@ async def on_ready():
     await client.change_presence(game=discord.Game(name=presence))
 
     # Birthday checking!
-    asyncio.ensure_future(update_birthday(client))
+    # asyncio.ensure_future(update_birthday(client))
 
     for channel in client.get_all_channels():
 
@@ -62,14 +63,17 @@ async def on_ready():
         if channel.id == TWITCH_CHANNEL:
             asyncio.ensure_future(twitch(client, channel))
 
-        if channel.id == REPORT_CHANNEL:
-            report_channel = channel
+        # if channel.id == REPORT_CHANNEL:
+        #     report_channel = channel
+
+        # if channel.id == WHITELIST_CHANNEL:
+        #     asyncio.ensure_future(check_whitelist(client, channel))
 
 @client.event
 async def on_message(message):
     try:
-        if report_channel and await report(client, report_channel, message):
-            return
+        # if report_channel and await report(client, report_channel, message):
+        #     return
 
         await emojistats(message)
 
