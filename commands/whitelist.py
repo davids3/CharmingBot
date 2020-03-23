@@ -12,7 +12,7 @@ WHITELIST_CHANNEL = config['CHANNELS'].get('Whitelist')
 SUB_ROLE_NAME = "Twitch Subscriber"
 SUB_ROLE_ID = config['FILES'].get(SUB_ROLE_NAME)
 SLEEP_INTERVAL = 10
-WHITELIST_PATH = 'home/mchost/Spigot2/whitelist.json'
+WHITELIST_PATH = '/home/mchost/Spigot2/whitelist.json'
 
 class Whitelist(Command):
     desc = "Commands for controlling Minecraft whitelist"
@@ -37,7 +37,7 @@ class Add(Whitelist):
         if self.user in whitelist_dict:
             raise CommandFailure('Username for %s already exists! To update, please remove and re-add.' % self.name)
         
-        mc_user['uuid'] = mc_user['id']
+        mc_user['uuid'] = mc_user['id'][:8] + '-' + mc_user['id'][8:12] + '-' + mc_user['id'][12:16] + '-' + mc_user['id'][16:20] + '-' + mc_user['id'][20:]
         mc_user.pop('id')
         whitelist_dict[self.user] = mc_user
         
@@ -125,7 +125,7 @@ def update_whitelist_file():
         return
 
     try:
-        subprocess.run('screen', '-d', 'r', 'spigot2', '-m', 'whitelist', 'reload')
+        subprocess.run(['screen', '-S', 'spigot2', '-X', 'stuff',  'whitelist reload\\r'])
 
     except:
         return
